@@ -21,7 +21,7 @@ archive_logs_if_needed() {
     TIMESTAMP=$(date +%Y%m%d_%H%M)
     cp "$LOGFILE" "$LOGDIR/dns-leak-report-$TIMESTAMP.log"
     > "$LOGFILE"
-    tar -czf "$LOGDIR/dns-leak-archive-$TIMESTAMP.tar.gz" -C "$LOGDIR" --exclude="*.tar.gz" *.log
+    tar -czf "$LOGDIR/dns-leak-archive-$TIMESTAMP.tar.gz" -C "$LOGDIR" --exclude="$(basename "$LOGFILE")" --exclude="*.tar.gz" *.log
     echo "📦 日志已归档并打包为 dns-leak-archive-$TIMESTAMP.tar.gz"
     LAST_ARCHIVE=$NOW
   fi
@@ -84,6 +84,23 @@ update_script() {
   echo "✅ 脚本已更新，请重新运行以加载新版本。"
   exit 0
 }
+
+## 输出当前配置参数
+run_monitor() {
+  echo "🛡️ DNS 泄露监控工具 - dnsti $VERSION"
+  echo "📍 当前配置参数："
+  echo "   🌐 API 地址       : $API_URL"
+  echo "   📁 日志目录       : $LOGDIR"
+  echo "   📄 当前日志文件   : $LOGFILE"
+  echo "   ⏱️ 轮询间隔       : ${INTERVAL}s"
+  echo "   📦 归档周期       : 每 $((ARCHIVE_INTERVAL / 3600)) 小时"
+  echo "   🧊 Fake-IP 前缀   : $FAKEIP_PREFIX"
+  echo
+
+  echo "📡 正在实时分析 Mihomo 日志（DNS 泄露 + 规则命中）..."
+  echo "按 Ctrl+C 停止"
+  echo
+  mkdir -p "$LOGDIR"
 
 # 🚀 主监控逻辑
 run_monitor() {
