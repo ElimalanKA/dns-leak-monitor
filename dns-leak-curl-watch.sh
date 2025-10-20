@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 基础配置 ---
-VERSION="v1.0.6-clean-control"
+VERSION="v1.0.7-log-fix" # Updated version
 REPO_URL="https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/dns-leak-curl-watch.sh"
 LOGDIR="/root/dns-leak-logs"
 LOGFILE="$LOGDIR/dns-leak-report.log"
@@ -189,21 +189,33 @@ run_monitor() {
         RUNTIME=$(printf "%02d:%02d:%02d" $HH $MM $SS)
 
         curl -s "$API_URL" | jq -r '.payload' | while read -r line; do
-            if [[ "$line" == *"dns response"* ]]; then
-                ip=$(echo "$line" | awk '{print $NF}')
-                domain=$(echo "$line" | awk '{print $(NF-1)}')
-                if [[ "$ip" != "$FAKEIP_PREFIX"* ]]; then
+            # 1. DNS 泄露检测：现在兼容新的 [DNS] domain --> [IP list] from... 格式
+            if [[ "$line" == *"[DNS]"* && "$line" == *"-->"* ]]; then
+                # 提取域名 (通常是第二个词)
+                domain=$(echo "$line" | awk '{print $2}')
+                # 提取第一个 IP (在第一个方括号 [] 内)，兼容 IPv4 和 IPv6
+                ip=$(echo "$line" | grep -oP '\[\K[0-9a-fA-F.:]+' | head -n1) 
+
+                if [[ -n "$ip" && "$ip" != "$FAKEIP_PREFIX"* ]]; then
                     ((count["$domain"]++))
-                    output="[$RUNTIME] ⚠️ 泄露域名: $domain → $ip（累计 ${count[$domain]} 次）"
-                    # 在后台模式下，这些 output 会被重定向到 /dev/null，但在 SIGUSR1 触发时，统计会打印到日志
+                    output="[$RUNTIME] ⚠️ DNS泄露: $domain → $ip（累计 ${count[$domain]} 次）"
                     echo "$output" >> "$LOGFILE"
                 fi
             fi
+            
+            # 2. RuleSet 匹配检测
             if [[ "$line" == *"match RuleSet("* ]]; then
-                domain=$(echo "$line" | grep -oP '(?<=--\>\s)[^: ]+')
+                # 提取目标 (可能带端口，如 copilot.microsoft.com:443)
+                target_with_port=$(echo "$line" | grep -oP '(?<=-->\s)[^: ]+')
+                
+                # 移除端口，只保留域名或 IP
+                target_domain=$(echo "$target_with_port" | awk -F: '{print $1}')
+
                 rule=$(echo "$line" | grep -oP 'RuleSet\(\K[^)]+' | head -n1)
-                if [[ -n "$domain" && -n "$rule" ]]; then
-                    ruleset["$domain"]="$rule"
+                
+                # 仅当目标是有效的域名格式 (包含点号且不以数字开头) 时才记录规则集关联
+                if [[ "$target_domain" == *.* && ! "$target_domain" =~ ^[0-9] ]]; then
+                    ruleset["$target_domain"]="$rule"
                 fi
             fi
         done
