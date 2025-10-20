@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# 📦 自动检测并安装依赖
+REQUIRED_CMDS=(jq curl awk grep tar)
+for cmd in "${REQUIRED_CMDS[@]}"; do
+  if ! command -v "$cmd" &> /dev/null; then
+    echo "🔧 未检测到依赖：$cmd，正在尝试安装..."
+    apt update && apt install -y "$cmd"
+    if ! command -v "$cmd" &> /dev/null; then
+      echo "❌ 安装 $cmd 失败，请手动安装后重试。"
+      exit 1
+    fi
+  fi
+done
+echo "✅ 所有依赖已准备好，开始执行脚本..."
+
 # 📁 日志目录与文件设置
 LOGDIR="/root/dns-leak-logs"
 mkdir -p "$LOGDIR"
