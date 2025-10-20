@@ -42,12 +42,12 @@ show_menu() {
   echo "5. 清理旧日志（保留最近 7 天）"
   echo "6. 停止后台监控"
   echo "0. 退出"
-  echo -n "请选择操作 [0-6]: "
+  echo -n "请选择操作 [0-6]："
   read choice
 }
 
 install_tool() {
-  echo "🔧 正在安装依赖..."
+  echo "🔧 正在安装必要依赖..."
   REQUIRED_CMDS=(jq curl awk grep tar)
   for cmd in "${REQUIRED_CMDS[@]}"; do
     if ! command -v "$cmd" &> /dev/null; then
@@ -58,13 +58,13 @@ install_tool() {
   echo "📁 创建日志目录..."
   mkdir -p "$LOGDIR"
 
-  echo "🔗 创建快捷命令 dnsti..."
+  echo "🔗 注册快捷命令 dnsti..."
   ln -sf "$(realpath "$0")" /usr/local/bin/dnsti
   chmod +x /usr/local/bin/dnsti
 
   echo
-  echo "✅ 安装完成！你现在可以使用快捷命令：dnsti"
-  echo "📦 运行方式：只需输入 dnsti 即可启动交互菜单"
+  echo "✅ 安装完成！你现在可以使用命令：dnsti"
+  echo "📦 输入 dnsti 即可启动交互菜单或自动监控"
   echo
 }
 
@@ -161,19 +161,26 @@ run_monitor() {
   done
 }
 
-# 🧭 菜单入口
-if [[ "$1" != "--run" ]]; then
-  show_menu
-  case "$choice" in
-    1) install_tool ;;
-    2) uninstall_tool ;;
-    3) start_monitor ;;
-    4) update_script ;;
-    5) clean_logs ;;
-    6) stop_monitor ;;
-    0) echo "👋 已退出"; exit 0 ;;
-    *) echo "❌ 无效选项"; exit 1 ;;
-  esac
-else
+# 🧭 脚本入口
+if [[ "$1" == "--run" ]]; then
   run_monitor
+else
+  if [ ! -f /usr/local/bin/dnsti ]; then
+    echo "🔧 检测到首次运行，正在自动安装..."
+    install_tool
+    echo "🚀 安装完成，即将启动监控..."
+    run_monitor
+  else
+    show_menu
+    case "$choice" in
+      1) install_tool ;;
+      2) uninstall_tool ;;
+      3) start_monitor ;;
+      4) update_script ;;
+      5) clean_logs ;;
+      6) stop_monitor ;;
+      0) echo "👋 已退出"; exit 0 ;;
+      *) echo "❌ 无效选项"; exit 1 ;;
+    esac
+  fi
 fi
