@@ -227,6 +227,7 @@ load_config
 if [[ "$1" == "--run" ]]; then
     run_monitor
 
+# 检查后台监控状态并显示控制信息
 elif [ -f "$PIDFILE" ]; then
     PID=$(cat "$PIDFILE")
     if ps -p "$PID" > /dev/null; then
@@ -238,7 +239,7 @@ elif [ -f "$PIDFILE" ]; then
         echo "要查看实时输出或刚刚发送的状态信息: tail -f $LOGFILE"
         echo "要停止服务: dnsti 7"
         echo "要修改配置: dnsti 3"
-        # 退出前台脚本
+        # 退出前台脚本，不进入菜单
         exit 0
     else
         echo "⚠️ 发现残留的 PID 文件 ($PIDFILE)，进程不存在。正在清理..."
