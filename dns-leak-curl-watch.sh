@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 基础配置 ---
-VERSION="v1.0.7-log-fix" # Updated version
+VERSION="v1.0.8-log-fix-v2" # Updated version
 REPO_URL="https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/dns-leak-curl-watch.sh"
 LOGDIR="/root/dns-leak-logs"
 LOGFILE="$LOGDIR/dns-leak-report.log"
@@ -189,7 +189,7 @@ run_monitor() {
         RUNTIME=$(printf "%02d:%02d:%02d" $HH $MM $SS)
 
         curl -s "$API_URL" | jq -r '.payload' | while read -r line; do
-            # 1. DNS 泄露检测：现在兼容新的 [DNS] domain --> [IP list] from... 格式
+            # 1. DNS 泄露检测：兼容 [DNS] domain --> [IP list] from... 格式
             if [[ "$line" == *"[DNS]"* && "$line" == *"-->"* ]]; then
                 # 提取域名 (通常是第二个词)
                 domain=$(echo "$line" | awk '{print $2}')
@@ -203,18 +203,27 @@ run_monitor() {
                 fi
             fi
             
-            # 2. RuleSet 匹配检测
-            if [[ "$line" == *"match RuleSet("* ]]; then
-                # 提取目标 (可能带端口，如 copilot.microsoft.com:443)
+            # 2. RuleSet 匹配检测：现在同时匹配 RuleSet(...) 和 Match using Final[...]
+            # 检查是否有匹配关键字
+            if [[ "$line" == *"match "* ]]; then
+                # 提取目标 (可能带端口，如 mqtt.szbboys.com:3885)
+                # 使用正则表达式从 '-->' 后面提取目标直到冒号或空格
                 target_with_port=$(echo "$line" | grep -oP '(?<=-->\s)[^: ]+')
                 
+                # 提取规则集名称：尝试匹配 RuleSet(...) 或 Final[...]
+                if [[ "$line" =~ RuleSet\(([^\)]+)\) ]]; then
+                    rule="${BASH_REMATCH[1]}"
+                elif [[ "$line" =~ Final\[([^\]]+)\] ]]; then
+                    rule="${BASH_REMATCH[1]}"
+                else
+                    rule=""
+                fi
+
                 # 移除端口，只保留域名或 IP
                 target_domain=$(echo "$target_with_port" | awk -F: '{print $1}')
 
-                rule=$(echo "$line" | grep -oP 'RuleSet\(\K[^)]+' | head -n1)
-                
-                # 仅当目标是有效的域名格式 (包含点号且不以数字开头) 时才记录规则集关联
-                if [[ "$target_domain" == *.* && ! "$target_domain" =~ ^[0-9] ]]; then
+                # 仅当目标是有效的域名格式 (包含点号且不以数字开头) 且规则非空时才记录关联
+                if [[ -n "$rule" && "$target_domain" == *.* && ! "$target_domain" =~ ^[0-9] ]]; then
                     ruleset["$target_domain"]="$rule"
                 fi
             fi
