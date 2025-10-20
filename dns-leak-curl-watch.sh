@@ -77,8 +77,8 @@ update_script() {
   echo "🔄 正在从 GitHub 拉取最新版本..."
   curl -s -o "$0" "$REPO_URL"
   chmod +x "$0"
-  echo "✅ 脚本已更新，请重新运行以加载新版本。"
-  exit 0
+  echo "🚀 更新完成，正在重新启动监控..."
+  exec "$0" --run
 }
 
 start_monitor() {
