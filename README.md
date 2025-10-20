@@ -8,13 +8,11 @@ This project provides a real-time DNS leak monitoring script for Mihomo, with ru
 - RuleSet match analysis for leaked domains
 - Logs stored in `/root/dns-leak-logs/`
 - Automatic daily log rotation and `.tar.gz` packaging
-- GitHub-based update mechanism via `run-dns-monitor.sh`
 
 ## Usage
 
 ### First-time setup
 
 ```bash
-curl -O https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/run-dns-monitor.sh
-chmod +x run-dns-monitor.sh
-./run-dns-monitor.sh
+curl -O https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/refs/heads/main/dns-leak-curl-watch.sh
+```
