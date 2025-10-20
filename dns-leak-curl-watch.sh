@@ -22,13 +22,13 @@ declare -A ruleset
 
 # --- 配置加载与保存 ---
 load_config() {
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    fi
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    fi
 }
 save_config() {
-    echo "API_URL=\"$API_URL\"" > "$CONFIG_FILE"
-    echo "FAKEIP_PREFIX=\"$FAKEIP_PREFIX\"" >> "$CONFIG_FILE"
+    echo "API_URL=\"$API_URL\"" > "$CONFIG_FILE"
+    echo "FAKEIP_PREFIX=\"$FAKEIP_PREFIX\"" >> "$CONFIG_FILE"
 }
 
 # --- 核心功能函数 ---
