@@ -27,6 +27,13 @@ archive_logs_if_needed() {
   fi
 }
 
+# 📦 清理函数
+clean_logs() {
+  echo "🧹 正在清理 7 天前的归档日志..."
+  find "$LOGDIR" -type f -name "*.tar.gz" -mtime +7 -delete
+  echo "✅ 清理完成：已删除 7 天前的归档包"
+}
+
 # 🧭 菜单界面
 show_menu() {
   echo "🛡️ DNS 泄露监控工具 - dnsti $VERSION"
@@ -34,8 +41,9 @@ show_menu() {
   echo "2. 卸载（移除快捷命令）"
   echo "3. 运行监控脚本"
   echo "4. 检查并更新脚本"
+  echo "5. 清理旧日志（保留最近 7 天）"
   echo "0. 退出"
-  echo -n "请选择操作 [0-4]: "
+  echo -n "请选择操作 [0-5]: "
   read choice
 }
 
@@ -133,6 +141,7 @@ if [[ "$1" != "--run" ]]; then
     2) uninstall_tool ;;
     3) exec "$0" --run ;;
     4) update_script ;;
+    5) clean_logs ;;    
     0) echo "👋 已退出"; exit 0 ;;
     *) echo "❌ 无效选项"; exit 1 ;;
   esac
