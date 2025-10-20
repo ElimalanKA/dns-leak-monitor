@@ -42,8 +42,9 @@ show_menu() {
   echo "3. 运行监控脚本"
   echo "4. 检查并更新脚本"
   echo "5. 清理旧日志（保留最近 7 天）"
+  echo "6. 停止后台监控"
   echo "0. 退出"
-  echo -n "请选择操作 [0-5]: "
+  echo -n "请选择操作 [0-6]: "
   read choice
 }
 
@@ -99,7 +100,10 @@ run_monitor() {
   echo
 
   echo "📡 正在实时分析 Mihomo 日志（DNS 泄露 + 规则命中）..."
-  echo "按 Ctrl+C 停止"
+  echo "📦 启动监控（后台运行）"
+  nohup "$0" --run > /dev/null 2>&1 &
+  echo $! > /tmp/dnsti.pid
+  echo "✅ 监控已在后台启动，PID: $(cat /tmp/dnsti.pid)"
   echo
   mkdir -p "$LOGDIR"
 
@@ -144,6 +148,17 @@ run_monitor() {
   done
 }
 
+## 🛑 停止监控
+stop_monitor() {
+  if [ -f /tmp/dnsti.pid ]; then
+    PID=$(cat /tmp/dnsti.pid)
+    kill "$PID" && rm -f /tmp/dnsti.pid
+    echo "🛑 已停止后台监控进程（PID: $PID）"
+  else
+    echo "⚠️ 未找到运行中的监控进程"
+  fi
+}
+
 # 🧭 菜单入口
 if [[ "$1" != "--run" ]]; then
   show_menu
@@ -152,7 +167,8 @@ if [[ "$1" != "--run" ]]; then
     2) uninstall_tool ;;
     3) exec "$0" --run ;;
     4) update_script ;;
-    5) clean_logs ;;    
+    5) clean_logs ;;   
+    6) stop_monitor ;;
     0) echo "👋 已退出"; exit 0 ;;
     *) echo "❌ 无效选项"; exit 1 ;;
   esac
