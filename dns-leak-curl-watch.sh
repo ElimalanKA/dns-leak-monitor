@@ -251,8 +251,7 @@ elif [ -f "$PIDFILE" ]; then
         echo "要查看实时输出或刚刚发送的状态信息: tail -f $LOGFILE"
         echo "要停止服务: dnsti 7"
         echo "要修改配置: dnsti 3"
-        # 退出前台脚本，不进入菜单
-        exit 0
+        # 状态显示完毕，不退出，继续执行下面的主菜单循环
     else
         echo "⚠️ 发现残留的 PID 文件 ($PIDFILE)，进程不存在。正在清理..."
         rm -f "$PIDFILE"
