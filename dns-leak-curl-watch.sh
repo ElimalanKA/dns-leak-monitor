@@ -85,8 +85,9 @@ update_script() {
   exit 0
 }
 
-## 输出当前配置参数
+# 🚀 主监控逻辑
 run_monitor() {
+## 输出当前配置参数
   echo "🛡️ DNS 泄露监控工具 - dnsti $VERSION"
   echo "📍 当前配置参数："
   echo "   🌐 API 地址       : $API_URL"
@@ -97,13 +98,6 @@ run_monitor() {
   echo "   🧊 Fake-IP 前缀   : $FAKEIP_PREFIX"
   echo
 
-  echo "📡 正在实时分析 Mihomo 日志（DNS 泄露 + 规则命中）..."
-  echo "按 Ctrl+C 停止"
-  echo
-  mkdir -p "$LOGDIR"
-
-# 🚀 主监控逻辑
-run_monitor() {
   echo "📡 正在实时分析 Mihomo 日志（DNS 泄露 + 规则命中）..."
   echo "按 Ctrl+C 停止"
   echo
