@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 基础配置 ---
-VERSION="v1.0.8-log-fix-v2" # Updated version
+VERSION="v1.0.9-robust-parse" # Updated version: 修复了域名和IP解析错误
 REPO_URL="https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/dns-leak-curl-watch.sh"
 LOGDIR="/root/dns-leak-logs"
 LOGFILE="$LOGDIR/dns-leak-report.log"
@@ -189,25 +189,31 @@ run_monitor() {
         RUNTIME=$(printf "%02d:%02d:%02d" $HH $MM $SS)
 
         curl -s "$API_URL" | jq -r '.payload' | while read -r line; do
-            # 1. DNS 泄露检测：兼容 [DNS] domain --> [IP list] from... 格式
+            # 1. DNS 泄露检测：更健壮的域名和 IP 提取
             if [[ "$line" == *"[DNS]"* && "$line" == *"-->"* ]]; then
-                # 提取域名 (通常是第二个词)
-                domain=$(echo "$line" | awk '{print $2}')
-                # 提取第一个 IP (在第一个方括号 [] 内)，兼容 IPv4 和 IPv6
+                # 提取 Domain: 提取 '-->' 之前最后一个非空字段作为域名
+                domain=$(echo "$line" | grep -oP '.*(?=\s-->)' | awk '{print $NF}')
+                
+                # 提取 IP: 提取第一个位于方括号 [] 内的 IP 地址 (IPv4 或 IPv6)
                 ip=$(echo "$line" | grep -oP '\[\K[0-9a-fA-F.:]+' | head -n1) 
 
                 if [[ -n "$ip" && "$ip" != "$FAKEIP_PREFIX"* ]]; then
+                    # 确保域名非空，如果解析失败则使用占位符
+                    if [ -z "$domain" ]; then
+                        domain="DOMAIN_PARSING_ERROR"
+                    fi
+                    
                     ((count["$domain"]++))
+                    # 修复了 IP 地址显示为 'D' 的问题
                     output="[$RUNTIME] ⚠️ DNS泄露: $domain → $ip（累计 ${count[$domain]} 次）"
                     echo "$output" >> "$LOGFILE"
                 fi
             fi
             
-            # 2. RuleSet 匹配检测：现在同时匹配 RuleSet(...) 和 Match using Final[...]
+            # 2. RuleSet 匹配检测：匹配 RuleSet(...) 或 Final[...]
             # 检查是否有匹配关键字
             if [[ "$line" == *"match "* ]]; then
                 # 提取目标 (可能带端口，如 mqtt.szbboys.com:3885)
-                # 使用正则表达式从 '-->' 后面提取目标直到冒号或空格
                 target_with_port=$(echo "$line" | grep -oP '(?<=-->\s)[^: ]+')
                 
                 # 提取规则集名称：尝试匹配 RuleSet(...) 或 Final[...]
@@ -219,7 +225,7 @@ run_monitor() {
                     rule=""
                 fi
 
-                # 移除端口，只保留域名或 IP
+                # 移除端口，只保留域名
                 target_domain=$(echo "$target_with_port" | awk -F: '{print $1}')
 
                 # 仅当目标是有效的域名格式 (包含点号且不以数字开头) 且规则非空时才记录关联
