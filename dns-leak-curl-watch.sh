@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 基础配置 ---
-VERSION="v1.0.9-robust-parse" # Updated version: 修复了域名和IP解析错误
+VERSION="v1.0.10-ip-filter" # Updated version: 增加了IP格式严格验证，过滤掉非标准IP如'D'
 REPO_URL="https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/dns-leak-curl-watch.sh"
 LOGDIR="/root/dns-leak-logs"
 LOGFILE="$LOGDIR/dns-leak-report.log"
@@ -197,14 +197,21 @@ run_monitor() {
                 # 提取 IP: 提取第一个位于方括号 [] 内的 IP 地址 (IPv4 或 IPv6)
                 ip=$(echo "$line" | grep -oP '\[\K[0-9a-fA-F.:]+' | head -n1) 
 
-                if [[ -n "$ip" && "$ip" != "$FAKEIP_PREFIX"* ]]; then
+                # 检查 IP 是否是有效的 IP 地址 (IPv4 包含至少两个点, IPv6 包含冒号)
+                is_valid_ip=false
+                if [[ "$ip" == *.*.* ]] || [[ "$ip" == *:* ]]; then
+                    is_valid_ip=true
+                fi
+
+                # 只有当 IP 是有效的 IP 格式且不是 FakeIP 时才记录泄露
+                if $is_valid_ip && [[ "$ip" != "$FAKEIP_PREFIX"* ]]; then
                     # 确保域名非空，如果解析失败则使用占位符
                     if [ -z "$domain" ]; then
                         domain="DOMAIN_PARSING_ERROR"
                     fi
                     
                     ((count["$domain"]++))
-                    # 修复了 IP 地址显示为 'D' 的问题
+                    # 记录有效的 IP 地址
                     output="[$RUNTIME] ⚠️ DNS泄露: $domain → $ip（累计 ${count[$domain]} 次）"
                     echo "$output" >> "$LOGFILE"
                 fi
