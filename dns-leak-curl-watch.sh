@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 基础配置 ---
-VERSION="v1.0.10-ip-filter" # Updated version: 增加了IP格式严格验证，过滤掉非标准IP如'D'
+VERSION="v1.0.11-domain-filter" # Updated version: 增加了严格的域名过滤，跳过 'cache' 和解析错误
 REPO_URL="https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/dns-leak-curl-watch.sh"
 LOGDIR="/root/dns-leak-logs"
 LOGFILE="$LOGDIR/dns-leak-report.log"
@@ -208,6 +208,11 @@ run_monitor() {
                     # 确保域名非空，如果解析失败则使用占位符
                     if [ -z "$domain" ]; then
                         domain="DOMAIN_PARSING_ERROR"
+                    fi
+                    
+                    # V1.0.11 增加：过滤内部噪音或已知的解析错误占位符
+                    if [[ "$domain" == "cache" ]] || [[ "$domain" == "DOMAIN_PARSING_ERROR" ]]; then
+                         continue # 跳过此条日志
                     fi
                     
                     ((count["$domain"]++))
