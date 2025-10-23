@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 基础配置 ---
-VERSION="v1.0.11-domain-filter" # Updated version: 增加了严格的域名过滤，跳过 'cache' 和解析错误
+VERSION="v1.0.12-optimized-log" # Updated version: 优化了日志输出逻辑
 REPO_URL="https://raw.githubusercontent.com/ElimalanKA/dns-leak-monitor/main/dns-leak-curl-watch.sh"
 LOGDIR="/root/dns-leak-logs"
 LOGFILE="$LOGDIR/dns-leak-report.log"
@@ -37,6 +37,7 @@ archive_logs_if_needed() {
     if (( NOW - LAST_ARCHIVE >= ARCHIVE_INTERVAL )); then
         TIMESTAMP=$(date +%Y%m%d_%H%M)
         cp "$LOGFILE" "$LOGDIR/dns-leak-report-$TIMESTAMP.log"
+        # 清空主日志文件，准备新一轮记录
         > "$LOGFILE"
         tar -czf "$LOGDIR/dns-leak-archive-$TIMESTAMP.tar.gz" -C "$LOGDIR" \
             --exclude="$(basename "$LOGFILE")" --exclude="*.tar.gz" *.log
@@ -154,7 +155,7 @@ start_monitor() {
     nohup "$0" --run > /dev/null 2>&1 &
     echo $! > "$PIDFILE"
     echo "✅ 监控已在后台启动，PID: $(cat "$PIDFILE")"
-    echo "    可使用 './dnsti' 查询状态或控制。"
+    echo "    可使用 './dnsti' 查询状态或控制。"
 }
 
 stop_monitor() {
@@ -187,8 +188,23 @@ run_monitor() {
         ELAPSED=$((CURRENT_TIME - START_TIME))
         HH=$((ELAPSED / 3600)); MM=$(((ELAPSED % 3600) / 60)); SS=$((ELAPSED % 60))
         RUNTIME=$(printf "%02d:%02d:%02d" $HH $MM $SS)
+        
+        # 优化：检查 curl 调用是否成功
+        LOG_PAYLOAD=$(curl -s "$API_URL" 2>/dev/null)
+        if [ $? -ne 0 ]; then
+            echo "❌ [$RUNTIME] 无法连接到 Mihomo API: $API_URL" >> "$LOGFILE"
+            sleep "$INTERVAL"
+            continue
+        fi
 
-        curl -s "$API_URL" | jq -r '.payload' | while read -r line; do
+        # 尝试从 payload 中提取日志行
+        LOG_LINES=$(echo "$LOG_PAYLOAD" | jq -r '.payload' 2>/dev/null)
+        
+        # 清空本次循环的计数器，用于判断是否有新数据
+        has_new_leak=false
+        has_new_match=false
+
+        echo "$LOG_LINES" | while IFS= read -r line; do
             # 1. DNS 泄露检测：更健壮的域名和 IP 提取
             if [[ "$line" == *"[DNS]"* && "$line" == *"-->"* ]]; then
                 # 提取 Domain: 提取 '-->' 之前最后一个非空字段作为域名
@@ -212,10 +228,11 @@ run_monitor() {
                     
                     # V1.0.11 增加：过滤内部噪音或已知的解析错误占位符
                     if [[ "$domain" == "cache" ]] || [[ "$domain" == "DOMAIN_PARSING_ERROR" ]]; then
-                         continue # 跳过此条日志
+                          continue # 跳过此条日志
                     fi
                     
                     ((count["$domain"]++))
+                    has_new_leak=true
                     # 记录有效的 IP 地址
                     output="[$RUNTIME] ⚠️ DNS泄露: $domain → $ip（累计 ${count[$domain]} 次）"
                     echo "$output" >> "$LOGFILE"
@@ -243,17 +260,29 @@ run_monitor() {
                 # 仅当目标是有效的域名格式 (包含点号且不以数字开头) 且规则非空时才记录关联
                 if [[ -n "$rule" && "$target_domain" == *.* && ! "$target_domain" =~ ^[0-9] ]]; then
                     ruleset["$target_domain"]="$rule"
+                    has_new_match=true
                 fi
             fi
         done
-
-        # 周期性地打印规则命中关联到日志
-        echo "📊 [$RUNTIME] 规则命中关联（泄露域名）：" >> "$LOGFILE"
-        for d in "${!count[@]}"; do
-            r="${ruleset[$d]:-未记录}"
-            echo "    - $d 命中规则集: ${r}" >> "$LOGFILE"
-        done
-        echo >> "$LOGFILE"
+        
+        # --- 日志输出判断逻辑（重点修改） ---
+        
+        # 只有当 'count' 数组有数据 (即发生了泄露) 或 'ruleset' 数组有新数据时，才打印统计信息
+        # 简化判断：只要 'count' 数组非空，我们就认为有值得打印的统计
+        if [ ${#count[@]} -gt 0 ]; then
+             echo "📊 [$RUNTIME] 规则命中关联（泄露域名）：" >> "$LOGFILE"
+             for d in "${!count[@]}"; do
+                 r="${ruleset[$d]:-未记录}"
+                 # 只有当 ruleset 中有记录时，才将规则名写入
+                 if [[ "$r" != "未记录" ]]; then
+                     echo "    - $d 命中规则集: ${r} (泄露 ${count[$d]} 次)" >> "$LOGFILE"
+                 else
+                     echo "    - $d (泄露 ${count[$d]} 次)" >> "$LOGFILE"
+                 fi
+             done
+             echo >> "$LOGFILE"
+        # 如果 count 数组为空，说明没有泄露发生，则不打印任何统计标题，保持日志简洁
+        fi
 
         archive_logs_if_needed
         sleep "$INTERVAL"
