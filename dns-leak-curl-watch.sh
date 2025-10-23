@@ -11,6 +11,8 @@ INTERVAL=5
 ARCHIVE_INTERVAL=86400
 PIDFILE="/tmp/dnsti.pid"
 CONFIG_FILE="$LOGDIR/config.sh"
+# 新增：启动日志文件，用于捕获后台启动错误
+STARTUP_LOG="$LOGDIR/dnsti_startup.log"
 
 # --- 变量初始化 ---
 API_URL="$DEFAULT_API_URL"
@@ -151,11 +153,12 @@ start_monitor() {
         return
     fi
     echo "📦 启动监控（后台运行）"
-    # 使用 nohup 启动，让脚本自己再次执行并进入 run_monitor
-    nohup "$0" --run > /dev/null 2>&1 &
+    # 使用 nohup 启动，并将 stdout 和 stderr 重定向到 STARTUP_LOG
+    nohup "$0" --run > "$STARTUP_LOG" 2>&1 &
     echo $! > "$PIDFILE"
     echo "✅ 监控已在后台启动，PID: $(cat "$PIDFILE")"
     echo "    可使用 './dnsti' 查询状态或控制。"
+    echo "❗ 如果日志文件未创建，请检查启动日志: cat $STARTUP_LOG" # 提示用户检查
 }
 
 stop_monitor() {
@@ -176,13 +179,20 @@ stop_monitor() {
 
 run_monitor() {
     # 使用变量封装复杂的陷阱命令，防止字符错误
-    TRAP_CMD='echo "📶 收到 SIGUSR1 查询状态"; echo "当前运行时间: $(date +%H:%M:%S -d@$(( $(date +%s) - START_TIME )))"; echo "--- 泄露统计 ---"; for d in "${!count[@]}"; do r="${ruleset[$d]:-未记录}"; echo "域名: $d → ${count[$d]} 次 (规则集: $r)"; done; echo "-----------------------------"'
+    TRAP_CMD='echo "📶 收到 SIGUSR1 查询状态" >> "$LOGFILE"; echo "当前运行时间: $(date +%H:%M:%S -d@$(( $(date +%s) - START_TIME )))" >> "$LOGFILE"; echo "--- 泄露统计 ---" >> "$LOGFILE"; for d in "${!count[@]}"; do r="${ruleset[$d]:-未记录}"; echo "域名: $d → ${count[$d]} 次 (规则集: $r)" >> "$LOGFILE"; done; echo "-----------------------------" >> "$LOGFILE"'
     
     trap "$TRAP_CMD" SIGUSR1
-    trap 'echo "🛑 收到 SIGTERM 停止信号"; exit 0' SIGTERM
+    trap 'echo "🛑 收到 SIGTERM 停止信号" >> "$LOGFILE" 2>/dev/null; exit 0' SIGTERM
 
     echo "📡 启动实时监控（PID: $$）"
+
+    # 关键修改 1: 确保 LOGFILE 在进入循环前被创建或清空
     mkdir -p "$LOGDIR"
+    touch "$LOGFILE" # 确保文件存在
+
+    # 首次写入启动信息到日志文件
+    echo "📡 启动实时监控（PID: $$）" >> "$LOGFILE"
+
     while true; do
         CURRENT_TIME=$(date +%s)
         ELAPSED=$((CURRENT_TIME - START_TIME))
